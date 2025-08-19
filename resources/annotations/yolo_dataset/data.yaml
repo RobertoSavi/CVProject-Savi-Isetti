@@ -11,6 +11,6 @@ names: ['person']
 roboflow:
   workspace: mocap-gjrro
   project: mocap_6
-  version: 1
+  version: 2
   license: CC BY 4.0
-  url: https://universe.roboflow.com/mocap-gjrro/mocap_6/dataset/1
+  url: https://universe.roboflow.com/mocap-gjrro/mocap_6/dataset/2

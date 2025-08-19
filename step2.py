@@ -8,8 +8,8 @@ import glob
 import re
 import matplotlib.pyplot as plt
 import pprint
-
 from collections import defaultdict
+
 FRAMES_NUMBER = 48
 CAMERA_INDEXES = [2, 5, 8, 13]
 IMG_HEIGHT = 2160
@@ -313,22 +313,22 @@ def main():
         
     image_paths = glob.glob(os.path.join(output_img_folder, "*.jpg"))
     
-    for image_path in image_paths:
-        basename = os.path.basename(image_path)
-        name_wo_ext = os.path.splitext(basename)[0]
-        label_path = os.path.join(labels_folder, f"{name_wo_ext}.txt")
+    # for image_path in image_paths:
+    #     basename = os.path.basename(image_path)
+    #     name_wo_ext = os.path.splitext(basename)[0]
+    #     label_path = os.path.join(labels_folder, f"{name_wo_ext}.txt")
 
-        match = re.search(r'out(\d+)_frame_(\d+).*\.jpg$', basename)
-        if match:
-            cam_index = int(match.group(1))
-            frame_index = int(match.group(2))
+    #     match = re.search(r'out(\d+)_frame_(\d+).*\.jpg$', basename)
+    #     if match:
+    #         cam_index = int(match.group(1))
+    #         frame_index = int(match.group(2))
 
-        else:
-            print("Could not extract camera index from filename:", image_path)
-            continue
-        triangulation_file = os.path.join(output_triangulation_folder, f"triangulated_frame_{frame_index:04d}.txt")
-        points_3d = np.loadtxt(path, dtype=np.float64)  # shape (N, 3)
-        draw_points_on_rectified(image_path, cameras[cam_index], points_3d, output_triangulation_folder_draws, color=(0,255,0), r=3)
+    #     else:
+    #         print("Could not extract camera index from filename:", image_path)
+    #         continue
+    #     triangulation_file = os.path.join(output_triangulation_folder, f"triangulated_frame_{frame_index:04d}.txt")
+    #     points_3d = np.loadtxt(path, dtype=np.float64)  # shape (N, 3)
+    #     draw_points_on_rectified(image_path, cameras[cam_index], points_3d, output_triangulation_folder_draws, color=(0,255,0), r=3)
         
         
     

@@ -13,7 +13,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LABELS_DIR = os.path.join(BASE_DIR, "utils", "rectified_labels")
 IMAGES_DIR = os.path.join(BASE_DIR, "utils", "rectified_images")  # rectified images from step2
 TRIANG_DIR = os.path.join(BASE_DIR, "utils", "triangulated_points")
-CAMERA_MATRICES_DIR = os.path.join(BASE_DIR, "resources", "cameras", "camera_data_with_Rvecs_2ndversion", "camera_data")
+CAMERA_MATRICES_DIR = os.path.join(BASE_DIR, "utils", "rectified_cameras")
 OUTPUT_OVERLAYS_DIR = os.path.join(BASE_DIR, "utils", "reprojected_overlays")
 OUTPUT_PLOTS_DIR = os.path.join(BASE_DIR, "utils", "error_plots")
 
@@ -39,7 +39,12 @@ def load_calibration(calib_path):
     dist = np.array(calib["dist"], dtype=np.float32)
     tvecs = np.array(calib["tvecs"], dtype=np.float32).reshape(3, 1)
     rvecs = np.array(calib["rvecs"], dtype=np.float32).reshape(3, 1)
-    return mtx, dist, tvecs, rvecs
+    
+    K_rect = None
+    if "K_rect" in calib:
+        K_rect = np.array(calib["K_rect"], dtype=np.float32)
+        
+    return mtx, dist, tvecs, rvecs, K_rect
 
 def parse_annotation_file(label_path, img_w, img_h):
     with open(label_path, 'r') as f:
@@ -203,9 +208,9 @@ def main():
     # Load camera calibration
     cameras = {}
     for cam_idx in CAMERA_INDEXES:
-        calib_path = os.path.join(CAMERA_MATRICES_DIR, f"cam_{cam_idx}", "calib", "camera_calib.json")
-        mtx, dist, tvecs, rvecs = load_calibration(calib_path)
-        cameras[cam_idx] = {"mtx": mtx, "dist": dist, "tvecs": tvecs, "rvecs": rvecs}
+        calib_path = os.path.join(CAMERA_MATRICES_DIR, f"cam_{cam_idx}_calib.json")
+        mtx, dist, tvecs, rvecs, K_rect = load_calibration(calib_path)
+        cameras[cam_idx] = {"mtx": K_rect, "dist": dist, "tvecs": tvecs, "rvecs": rvecs}
 
     # Map frames to GT label paths
     frame_to_labels = defaultdict(dict)
