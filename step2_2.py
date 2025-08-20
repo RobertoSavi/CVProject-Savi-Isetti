@@ -61,6 +61,7 @@ def triangulate_all_frames(projection_matrices, all_frames_views, output_folder)
         print(f"Saved 3D points for frame {frame_idx} to {output_path}")
 
 def main():
+    os.makedirs(TRIANG_FOLDER, exist_ok=True)
     label_paths = glob.glob(os.path.join(step2_1.RECT_LABEL_FOLDER, "*.txt"))
     label_paths_sorted = sorted(label_paths)
     
@@ -79,10 +80,11 @@ def main():
         all_frames_views[frame_index] = frame_tuple
         
     projection_matrices = {}
-    camera_paths = glob.glob(os.path.join(step2_1.CAMERA_FOLDER, "*json"))
+    camera_paths = glob.glob(os.path.join(step2_1.RECT_CAMERA_FOLDER, "*json"))
     camera_paths_sorted = sorted(camera_paths)
     for camera_path in camera_paths_sorted:
         _, _, tvecs, rvecs, K_rect = step2_1.load_calibration(camera_path)
+        print(int(os.path.basename(camera_path).split('_')[1]))
         projection_matrices[int(os.path.basename(camera_path).split('_')[1])] = compute_projection_matrix(K_rect, tvecs, rvecs)
         
     # Perform traingulation for all frames

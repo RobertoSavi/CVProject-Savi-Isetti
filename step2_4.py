@@ -210,7 +210,22 @@ def main():
     for cam_idx in CAMERA_INDEXES:
         calib_path = os.path.join(CAMERA_MATRICES_DIR, f"cam_{cam_idx}_calib.json")
         mtx, dist, tvecs, rvecs, K_rect = load_calibration(calib_path)
-        cameras[cam_idx] = {"mtx": K_rect, "dist": dist, "tvecs": tvecs, "rvecs": rvecs}
+
+        if K_rect is not None:
+            # Use rectified intrinsics, zero distortion
+            K = np.asarray(K_rect, dtype=np.float32)
+            dist_used = np.zeros((1, 5), dtype=np.float32)
+        else:
+            # Use original intrinsics + distortion
+            K = np.asarray(mtx, dtype=np.float32)
+            dist_used = np.asarray(dist, dtype=np.float32)
+
+        cameras[cam_idx] = {
+            "mtx": K,
+            "dist": dist_used,
+            "tvecs": np.asarray(tvecs, dtype=np.float32).reshape(3, 1),
+            "rvecs": np.asarray(rvecs, dtype=np.float32).reshape(3, 1),
+        }
 
     # Map frames to GT label paths
     frame_to_labels = defaultdict(dict)

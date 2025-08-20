@@ -4,36 +4,24 @@ import scipy.io as sio
 import os
 import json
 import step2_4
+import step2_1
 
 CAMERA_INDEXES = [2]
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CAMERA_MATRICES_DIR = os.path.join(BASE_DIR, "resources", "cameras", "camera_data_with_Rvecs_2ndversion", "camera_data")
-
 
 # ==========================
 # Parameters
 # ==========================
 mocap_file = "Motion_Capture_Data/Nick_2.mat"
-video_file = "resources/video_Step3/FullVideo.mp4"
+video_file = "Motion_Capture_Data/full_video.mp4"
 output_file = "output_skeleton_overlay2.mp4"
-
-
-# ==== FUNCTIONS ====
-def load_calibration(calib_path):
-    with open(calib_path, 'r') as f:
-        calib = json.load(f)
-    mtx = np.array(calib["mtx"], dtype=np.float32)
-    dist = np.array(calib["dist"], dtype=np.float32)
-    tvecs = np.array(calib["tvecs"], dtype=np.float32).reshape(3, 1)
-    rvecs = np.array(calib["rvecs"], dtype=np.float32).reshape(3, 1)
-    return mtx, dist, tvecs, rvecs
 
 # Load camera calibration
 cameras = {}
 for cam_idx in CAMERA_INDEXES:
-    calib_path = os.path.join(CAMERA_MATRICES_DIR, f"cam_{cam_idx}", "calib", "camera_calib.json")
-    mtx, dist, tvecs, rvecs = load_calibration(calib_path)
-    cameras[cam_idx] = {"mtx": mtx, "dist": dist, "tvecs": tvecs, "rvecs": rvecs}
+    calib_path = os.path.join(step2_1.RECT_CAMERA_FOLDER, f"cam_{cam_idx}_calib.json")
+    mtx, dist, tvecs, rvecs, R_rect = step2_1.load_calibration(calib_path)
+    cameras[cam_idx] = {"mtx": R_rect, "dist": dist, "tvecs": tvecs, "rvecs": rvecs}
 
 
 # ==========================
@@ -91,8 +79,8 @@ label_to_index = {lbl: i for i, lbl in enumerate(segment_labels)}
 # ==========================
 frame_idx = 0
 
-calib_path = os.path.join(CAMERA_MATRICES_DIR, f"cam_{cam_idx}", "calib", "camera_calib.json")
-mtx, dist, tvecs, rvecs = load_calibration(calib_path)
+calib_path = os.path.join(step2_1.RECT_CAMERA_FOLDER, f"cam_{cam_idx}_calib.json")
+mtx, dist, tvecs, rvecs, _ = step2_1.load_calibration(calib_path)
     
 while cap.isOpened():
     ret, frame = cap.read()
