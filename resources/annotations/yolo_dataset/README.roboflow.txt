@@ -1,8 +1,8 @@
 
-mocap_6 - v2 2025-08-19 12:40pm
+mocap_6 - v4 2025-08-20 12:17pm
 ==============================
 
-This dataset was exported via roboflow.com on August 19, 2025 at 10:40 AM GMT
+This dataset was exported via roboflow.com on August 20, 2025 at 10:26 AM GMT
 
 Roboflow is an end-to-end computer vision platform that helps you
 * collaborate with your team on computer vision projects
