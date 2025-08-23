@@ -34,11 +34,13 @@ MOCAP_ALIGN_FRAME = 9965
 # Directory paths
 SCRIPT_DIR = os.getcwd()
 
+# Input data
 IMG_FOLDER = os.path.join(SCRIPT_DIR, "..", "resources", "annotations", "yolo_dataset", "train", "images")
 LABELS_FOLDER = os.path.join(SCRIPT_DIR, "..", "resources", "annotations", "yolo_dataset", "train", "labels")
 CAMERA_FOLDER = os.path.join(SCRIPT_DIR, "..", "resources", "cameras", "camera_data")
 MOCAP_FOLDER = os.path.join(SCRIPT_DIR, "..", "resources", "mocap")
 
+# Output data
 RECT_IMG_FOLDER = os.path.join(SCRIPT_DIR, "..", "results", "rectified_images")
 RECT_LABEL_FOLDER = os.path.join(SCRIPT_DIR, "..", "results", "rectified_labels")
 RECT_CAMERA_FOLDER = os.path.join(SCRIPT_DIR, "..", "results", "rectified_cameras")

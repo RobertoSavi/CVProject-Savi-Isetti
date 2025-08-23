@@ -21,115 +21,6 @@ def reproject_points(points_3d, mtx, dist, rvecs, tvecs):
     points_2d, _ = cv2.projectPoints(points_3d, rvecs, tvecs, mtx, dist)
     return points_2d.reshape(-1, 2)
 
-def plot_errors(errors_list, output_dir):
-    frames = [e['frame'] for e in errors_list]
-    cameras = [e['camera'] for e in errors_list]
-    mpjpes = [e['mpjpe'] for e in errors_list]
-    mses = [e['mse'] for e in errors_list]
-
-    colors = {2: 'red', 5: 'blue', 8: 'green', 13: 'orange'}
-
-    def apply_y_ticks(ax, data, zoom=False, is_mse=False):
-        max_val = np.max(data)
-        if zoom:
-            max_val = np.percentile(data, 95)
-
-        # heuristic step size depending on metric
-        if is_mse:
-            step = max(50, round(max_val / 15, -1))   # ~15 ticks, rounded to nearest 10
-        else:
-            step = max(5, round(max_val / 15, -1))    # ~15 ticks, rounded to nearest 5
-
-        ax.yaxis.set_major_locator(ticker.MultipleLocator(step))
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-        if is_mse:
-            ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
-        else:
-            ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
-
-        ax.grid(True, which="both", linestyle="--", alpha=0.6)
-
-    # ========== MPJPE PLOT (FULL) ==========
-    plt.figure(figsize=(12, 5))
-    for cam in sorted(set(cameras)):
-        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
-        cam_vals = [m for m, c in zip(mpjpes, cameras) if c == cam]
-        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
-
-    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
-    plt.xlabel("Frame index")
-    plt.ylabel("MPJPE (px)")
-    plt.title("Mean Per Joint Position Error by Frame and Camera (Full Scale)")
-    plt.legend()
-
-    ax = plt.gca()
-    apply_y_ticks(ax, mpjpes, zoom=False, is_mse=False)
-
-    plt.savefig(os.path.join(output_dir, "mpjpe_plot.png"), dpi=200)
-    plt.close()
-
-    # ========== MPJPE PLOT (ZOOMED) ==========
-    threshold = np.percentile(mpjpes, 95)
-    plt.figure(figsize=(12, 5))
-    for cam in sorted(set(cameras)):
-        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
-        cam_vals = [m for m, c in zip(mpjpes, cameras) if c == cam]
-        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
-
-    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
-    plt.ylim(0, threshold)
-    plt.xlabel("Frame index")
-    plt.ylabel("MPJPE (px)")
-    plt.title(f"Mean Per Joint Position Error (Zoomed, <= {threshold:.1f}px)")
-    plt.legend()
-
-    ax = plt.gca()
-    apply_y_ticks(ax, mpjpes, zoom=True, is_mse=False)
-
-    plt.savefig(os.path.join(output_dir, "mpjpe_plot_zoom.png"), dpi=200)
-    plt.close()
-
-    # ========== MSE PLOT (FULL) ==========
-    plt.figure(figsize=(12, 5))
-    for cam in sorted(set(cameras)):
-        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
-        cam_vals = [m for m, c in zip(mses, cameras) if c == cam]
-        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
-
-    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
-    plt.xlabel("Frame index")
-    plt.ylabel("MSE (px²)")
-    plt.title("Mean Squared Error by Frame and Camera (Full Scale)")
-    plt.legend()
-
-    ax = plt.gca()
-    apply_y_ticks(ax, mses, zoom=False, is_mse=True)
-
-    plt.savefig(os.path.join(output_dir, "mse_plot.png"), dpi=200)
-    plt.close()
-
-    # ========== MSE PLOT (ZOOMED) ==========
-    threshold = np.percentile(mses, 95)
-    plt.figure(figsize=(12, 5))
-    for cam in sorted(set(cameras)):
-        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
-        cam_vals = [m for m, c in zip(mses, cameras) if c == cam]
-        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
-
-    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
-    plt.ylim(0, threshold)
-    plt.xlabel("Frame index")
-    plt.ylabel("MSE (px²)")
-    plt.title(f"Mean Squared Error (Zoomed, <= {threshold:.1f})")
-    plt.legend()
-
-    ax = plt.gca()
-    apply_y_ticks(ax, mses, zoom=True, is_mse=True)
-
-    plt.savefig(os.path.join(output_dir, "mse_plot_zoom.png"), dpi=200)
-    plt.close()
-
-# ==== MAIN ====
 def main():
     # Load camera calibration
     cameras = {}
@@ -214,7 +105,7 @@ def main():
         all_mse = np.mean([e["mse"] for e in all_errors])
         print(f"\nOverall MPJPE: {all_mpjpe:.2f}px")
         print(f"Overall MSE: {all_mse:.2f}px^2")
-        plot_errors(all_errors, config.TRIANG_ERROR_PLOTS_FOLDER)
+        plot.plot_errors(all_errors, config.TRIANG_ERROR_PLOTS_FOLDER, unit="px")
 
 if __name__ == "__main__":
     main()

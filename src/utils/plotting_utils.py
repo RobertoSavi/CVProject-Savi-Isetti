@@ -1,5 +1,8 @@
+import os
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 # Draws joints and skeleton on an image
 # Parameters
@@ -124,3 +127,129 @@ def draw_skeleton_connections_3d(ax, points_a, points_b, color='y', lw=2.0, alph
         if not np.isfinite([xa, ya, za, xb, yb, zb]).all():
             continue
         ax.plot([xa, xb], [ya, yb], [za, zb], color=color, linewidth=lw, alpha=alpha)
+        
+        
+# Plots MPJPE and MSE timelines (per frame and per camera) and saves 4 PNGs:
+#   - mpjpe_plot.png          (full scale)
+#   - mpjpe_plot_zoom.png     (y-axis zoomed to 95th percentile)
+#   - mse_plot.png            (full scale)
+#   - mse_plot_zoom.png       (y-axis zoomed to 95th percentile)
+#
+# Parameters
+#   errors_list: list of dicts, each with keys:
+#       'frame'  -> int frame index
+#       'camera' -> int camera id (e.g., 2, 5, 8, 13)
+#       'mpjpe'  -> float Mean Per Joint Position Error (in `unit`, e.g., mm)
+#       'mse'    -> float Mean Squared Error (in `unit_sq`, e.g., mm²)
+#   output_dir: directory where the PNGs will be written (created if missing)
+#   unit:       label for MPJPE y-axis (e.g., "mm")
+#   unit_sq:    label for MSE y-axis (defaults to f"{unit}²" if None)        
+def plot_errors(errors_list, output_dir, unit="mm", unit_sq=None):
+    if not errors_list:
+        return
+    if unit_sq is None:
+        unit_sq = f"{unit}²"
+
+    frames  = [e['frame']  for e in errors_list]
+    cameras = [e['camera'] for e in errors_list]
+    mpjpes  = [e['mpjpe']  for e in errors_list]
+    mses    = [e['mse']    for e in errors_list]
+
+    os.makedirs(output_dir, exist_ok=True)
+    colors = {2: 'red', 5: 'blue', 8: 'green', 13: 'orange'}
+
+    def apply_y_ticks(ax, data, zoom=False, is_mse=False):
+        max_val = np.max(data) if len(data) else 0.0
+        if zoom and len(data):
+            max_val = np.percentile(data, 95)
+
+        # heuristic step size depending on metric
+        if is_mse:
+            step = max(50, round(max_val / 15, -1))   # ~15 ticks, rounded to nearest 10
+        else:
+            step = max(5,  round(max_val / 15, -1))   # ~15 ticks, rounded to nearest 5
+
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(step))
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+        ax.grid(True, which="both", linestyle="--", alpha=0.6)
+
+    # ========== MPJPE PLOT (FULL) ==========
+    plt.figure(figsize=(12, 5))
+    for cam in sorted(set(cameras)):
+        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
+        cam_vals   = [m for m, c in zip(mpjpes, cameras) if c == cam]
+        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
+
+    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
+    plt.xlabel("Frame index")
+    plt.ylabel(f"MPJPE ({unit})")
+    plt.title("Mean Per Joint Position Error by Frame and Camera (Full Scale)")
+    plt.legend()
+
+    ax = plt.gca()
+    apply_y_ticks(ax, mpjpes, zoom=False, is_mse=False)
+
+    plt.savefig(os.path.join(output_dir, "mpjpe_plot.png"), dpi=200)
+    plt.close()
+
+    # ========== MPJPE PLOT (ZOOMED) ==========
+    threshold = np.percentile(mpjpes, 95) if len(mpjpes) else 0.0
+    plt.figure(figsize=(12, 5))
+    for cam in sorted(set(cameras)):
+        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
+        cam_vals   = [m for m, c in zip(mpjpes, cameras) if c == cam]
+        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
+
+    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
+    plt.ylim(0, threshold)
+    plt.xlabel("Frame index")
+    plt.ylabel(f"MPJPE ({unit})")
+    plt.title(f"Mean Per Joint Position Error (Zoomed, <= {threshold:.1f} {unit})")
+    plt.legend()
+
+    ax = plt.gca()
+    apply_y_ticks(ax, mpjpes, zoom=True, is_mse=False)
+
+    plt.savefig(os.path.join(output_dir, "mpjpe_plot_zoom.png"), dpi=200)
+    plt.close()
+
+    # ========== MSE PLOT (FULL) ==========
+    plt.figure(figsize=(12, 5))
+    for cam in sorted(set(cameras)):
+        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
+        cam_vals   = [m for m, c in zip(mses, cameras) if c == cam]
+        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
+
+    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
+    plt.xlabel("Frame index")
+    plt.ylabel(f"MSE ({unit_sq})")
+    plt.title("Mean Squared Error by Frame and Camera (Full Scale)")
+    plt.legend()
+
+    ax = plt.gca()
+    apply_y_ticks(ax, mses, zoom=False, is_mse=True)
+
+    plt.savefig(os.path.join(output_dir, "mse_plot.png"), dpi=200)
+    plt.close()
+
+    # ========== MSE PLOT (ZOOMED) ==========
+    threshold = np.percentile(mses, 95) if len(mses) else 0.0
+    plt.figure(figsize=(12, 5))
+    for cam in sorted(set(cameras)):
+        cam_frames = [f for f, c in zip(frames, cameras) if c == cam]
+        cam_vals   = [m for m, c in zip(mses, cameras) if c == cam]
+        plt.plot(cam_frames, cam_vals, 'o-', color=colors.get(cam, 'black'), label=f'Camera {cam}')
+
+    plt.xticks(frames, [f"{frame}" for frame in frames], rotation=45)
+    plt.ylim(0, threshold)
+    plt.xlabel("Frame index")
+    plt.ylabel(f"MSE ({unit_sq})")
+    plt.title(f"Mean Squared Error (Zoomed, <= {threshold:.1f} {unit_sq})")
+    plt.legend()
+
+    ax = plt.gca()
+    apply_y_ticks(ax, mses, zoom=True, is_mse=True)
+
+    plt.savefig(os.path.join(output_dir, "mse_plot_zoom.png"), dpi=200)
+    plt.close()

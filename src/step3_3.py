@@ -187,17 +187,19 @@ def evaluate_triangulation_error(camera, rvecs, tvecs, tri_xyz_W, mc_xyz, units=
     err_vec = tri_in_M - mc_xyz                 # in your native units
     per_joint = np.linalg.norm(err_vec, axis=1) * to_mm
     mpjpe = float(np.mean(per_joint))
-    rmse  = float(np.sqrt(np.mean(per_joint**2)))
+    mse   = float(np.mean(per_joint**2))
+    rmse  = float(np.sqrt(mse))
 
     return {
         "MPJPE_mm": mpjpe,
+        "MSE_mm":   mse,
         "RMSE_mm" : rmse,
         "per_joint_mm": per_joint,
         "T_M_from_W": T_M_from_W,
         "T_M_from_C": T_M_from_C,
         "T_C_from_W": T_C_from_W,
         "tri_in_M": tri_in_M,
-    }    
+    } 
     
 def main():
     os.makedirs(config.MOCAP_OVERLAYS_FOLDER, exist_ok=True)
@@ -213,6 +215,7 @@ def main():
     position_data = nick.Skeletons.PositionData  # (3, 24, n_frames)
     
 
+    all_errors = []
     for label_path in glob.glob(os.path.join(config.RECT_LABEL_FOLDER, "*.txt")):
         basename = os.path.basename(label_path)
         name_wo_ext = os.path.splitext(basename)[0]
@@ -249,6 +252,7 @@ def main():
 
         result = evaluate_triangulation_error(camera, rvec, tvec, tri_ordered, mc_ordered, units="mm")
         # print(f"Frame {frame_index} | MPJPE: {result['MPJPE_mm']:.2f} mm | RMSE: {result['RMSE_mm']:.2f} mm")
+        all_errors.append({"frame": frame_index,  "camera": cam_index,"mpjpe": result["MPJPE_mm"],"mse": result["MSE_mm"] })
 
         mocap_3d_path = os.path.join(config.MOCAP_TRIANG_3D_FOLDER, f"{name_wo_ext}_3D.png")
         plot_3d_mocap_vs_triangulation(
@@ -256,6 +260,7 @@ def main():
             tri_in_M=result["tri_in_M"],
             output_path=mocap_3d_path,
         )
+    plot.plot_errors(all_errors, config.MOCAP_ERROR_PLOTS_FOLDER, unit="mm")
 
 if __name__ == "__main__":
     main()
