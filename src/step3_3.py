@@ -14,8 +14,10 @@ import utils.calibration_utils as calib
 import utils.annotation_utils as annot
 import utils.plotting_utils as plot
 
-# Averages transformation matrices
-def _avg_se3(T_list):
+# Average a list of 4x4 rigid transforms (SE(3)).
+# Rotation is averaged via chordal/SVD mean; translation via arithmetic mean.
+# Returns a proper rigid transform (det(R)=+1).
+def average_rigid_transform(T_list):
     if not T_list:
         return None
     R_sum = np.zeros((3,3), dtype=float)
@@ -297,7 +299,7 @@ def main():
     # Average T_M_from_W per camera across its frames
     Tbar_per_cam = {}
     for cam_idx, Ts in sorted(per_cam_Ts.items()):
-        Tbar = _avg_se3(Ts)
+        Tbar = average_rigid_transform(Ts)
         if Tbar is not None:
             Tbar_per_cam[cam_idx] = Tbar
 
