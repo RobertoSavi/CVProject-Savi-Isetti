@@ -21,26 +21,11 @@ output_file = "../results/video_mocap_time_aligned.mp4"
 VIDEO_ALIGN_FRAME = 45 # Frame 46 (0-indexed is 45)
 MOCAP_ALIGN_FRAME = 9964 # MoCap frame 9965 (0-indexed is 9964) or 10475 (0-indexed is 10474)
 
-# Load camera calibration matrix and distortion coefficients from a JSON file
-def load_calibration(calib_path):
-    with open(calib_path, 'r') as f:
-        calib = json.load(f)
-    mtx = np.array(calib["mtx"], dtype=np.float32)
-    dist = np.array(calib["dist"], dtype=np.float32)
-    tvecs = np.array(calib["tvecs"], dtype=np.float32).reshape(3, 1)
-    rvecs = np.array(calib["rvecs"], dtype=np.float32).reshape(3, 1)
-    
-    K_rect = None
-    if "K_rect" in calib:
-        K_rect = np.array(calib["K_rect"], dtype=np.float32)
-        
-    return mtx, dist, tvecs, rvecs, K_rect
-
 # Load camera calibration
 cameras = {}
 for cam_idx in CAMERA_INDEXES:
     calib_path = os.path.join(config.RECT_CAMERA_FOLDER, f"cam_{cam_idx}_calib.json")
-    mtx, dist, tvecs, rvecs, K_rect = load_calibration(calib_path)
+    mtx, dist, tvecs, rvecs, K_rect, _ = calib.load_calibration(calib_path)
     cameras[cam_idx] = {"mtx": K_rect, "dist": dist, "tvecs": tvecs, "rvecs": rvecs}
 
 
@@ -98,7 +83,7 @@ label_to_index = {lbl: i for i, lbl in enumerate(segment_labels)}
 frame_idx = 0
 
 calib_path = os.path.join(config.RECT_CAMERA_FOLDER, f"cam_{cam_idx}_calib.json")
-mtx, dist, tvecs, rvecs , K_rect = load_calibration(calib_path)
+mtx, dist, tvecs, rvecs , K_rect, _ = calib.load_calibration(calib_path)
 
 mocap_idx_start = 0
 mocap_idx_end = 999

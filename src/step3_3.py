@@ -14,6 +14,26 @@ import utils.calibration_utils as calib
 import utils.annotation_utils as annot
 import utils.plotting_utils as plot
 
+# Averages transformation matrices
+def _avg_se3(T_list):
+    if not T_list:
+        return None
+    R_sum = np.zeros((3,3), dtype=float)
+    t_sum = np.zeros(3, dtype=float)
+    for T in T_list:
+        R_sum += T[:3,:3]
+        t_sum += T[:3,3]
+    U, _, Vt = np.linalg.svd(R_sum)
+    R = U @ Vt
+    if np.linalg.det(R) < 0:  # force proper rotation
+        U[:, -1] *= -1
+        R = U @ Vt
+    t = t_sum / len(T_list)
+    Tm = np.eye(4); Tm[:3,:3] = R; Tm[:3,3] = t
+    return Tm
+
+# ------------------------------------------------------------------
+
 def get_mocap_idx(frame_idx, align_annotation=22, align_mocap=9965,
                   mocap_fps=100, ann_fps=12, n_mocap_frames=12000):
     scale = mocap_fps / ann_fps
@@ -27,7 +47,6 @@ def get_mocap_idx(frame_idx, align_annotation=22, align_mocap=9965,
 def align_mocap_and_annotations(img_path, keypoints, joints_3d, camera, out_path):
     # joints_3d: (24, 3) from your mocap file
     mc = np.asarray(joints_3d, dtype=float)
-
     # keypoints: list/array of (x, y, score) -> (N, 3)
     kp = np.asarray(keypoints, dtype=float)
 
@@ -37,32 +56,25 @@ def align_mocap_and_annotations(img_path, keypoints, joints_3d, camera, out_path
 
     # Aligned arrays
     kp_xy   = kp[lbl_idxs, :2]               # (18, 2)  keep x,y only (drop score)
-    mc_xyz  = mc[np.array(mc_idxs), :3]      # (18, 3)
+    mc_xyz  = mc[np.array(mc_idxs), :3]      # (18, 3)x     
 
-    # Build dict: {label_idx: ((x,y), (X,Y,Z))}
-    pairs_dict = {
-        idx: (tuple(kp_xy[i]), tuple(mc_xyz[i]))
-        for i, idx in enumerate(lbl_idxs)
-    }
-    
     mtx, dist, tvecs, rvecs, K_rect, P = camera
 
-    pairs = sorted(pairs_dict.items())  # ensure consistent order
-    img_pts = np.array([p[1][0] for p in pairs], dtype=np.float64)   # (N,2)
-    obj_pts = np.array([p[1][1] for p in pairs], dtype=np.float64)   # (N,3)
+    img_pts = np.array(kp_xy, dtype=np.float64)   # (N,2)
+    obj_pts = np.array(mc_xyz, dtype=np.float64)  # (N,3)
 
     distCoeffs = np.zeros((5, 1), dtype=np.float64)
 
     # Solve PnP: pose of camera w.r.t. mocap coordinates
-    # RANSAC to handle potential outliers, then refine with ITERATIVE on inliers
+    # RANSAC to handle potential outliers, then refine iteratively on inliers
     ok, rvec, tvec, inliers = cv2.solvePnPRansac(
         objectPoints=obj_pts,
         imagePoints=img_pts,
         cameraMatrix=K_rect,
         distCoeffs=distCoeffs,
-        flags=cv2.SOLVEPNP_AP3P,        # good robust initializer
+        flags=cv2.SOLVEPNP_AP3P,
         iterationsCount=200,
-        reprojectionError=3.0,          # px
+        reprojectionError=3.0,
         confidence=0.999
     )
     if not ok or inliers is None or len(inliers) < 6:
@@ -75,7 +87,7 @@ def align_mocap_and_annotations(img_path, keypoints, joints_3d, camera, out_path
             flags=cv2.SOLVEPNP_EPNP
         )
         inliers = np.arange(obj_pts.shape[0]).reshape(-1, 1)
-
+        
     # Refine on inliers with Levenberg-Marquardt
     ok, rvec, tvec = cv2.solvePnP(
         objectPoints=obj_pts[inliers[:,0]],
@@ -90,7 +102,6 @@ def align_mocap_and_annotations(img_path, keypoints, joints_3d, camera, out_path
     # Project mocap 3D points onto the image
     proj_pts, _ = cv2.projectPoints(obj_pts, rvec, tvec, K_rect, distCoeffs)
     proj_pts = proj_pts.reshape(-1, 2)
-
     # Compute reprojection error (RMS and per-point)
     errors = np.linalg.norm(proj_pts - img_pts, axis=1)
     rms = np.sqrt(np.mean(errors**2))
@@ -99,22 +110,18 @@ def align_mocap_and_annotations(img_path, keypoints, joints_3d, camera, out_path
     # Visualize overlay
     img = cv2.imread(img_path)
     assert img is not None, f"Could not read image: {img_path}"
-
     # Draw GT 2D keypoints (blue) and projected mocap (red), and lines between them
     img = plot.draw_joints_and_skeleton(img, proj_pts, config.CONNECTIONS, color=(255, 0, 0))
     img = plot.draw_joints_and_skeleton(img, img_pts, config.CONNECTIONS, color=(0, 255, 0))
-    img = plot.draw_skeleton_connections(img, img_pts, proj_pts, color=(0,255,255))    # yellow links
-    # Put RMS text
-    cv2.putText(img, f"RMS reprojection: {rms:.2f}px | Inliers: {len(inliers)}/{len(obj_pts)}",
-                (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,0), 3, cv2.LINE_AA)
-    cv2.putText(img, f"RMS reprojection: {rms:.2f}px | Inliers: {len(inliers)}/{len(obj_pts)}",
-                (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2, cv2.LINE_AA)
-
+    img = plot.draw_skeleton_connections(img, img_pts, proj_pts, color=(0,255,255))
+    
     # Save the overlay image
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     cv2.imwrite(out_path, img)
     print("Saved overlay to:", out_path)
     return rvec, tvec, K_rect
     
+
 # From the projection matrix P = K [R|t], recover the camera pose:
 # World (W) -> Camera (C): T_C_from_W (4x4)
 def _T_C_from_W_from_P(P):
@@ -164,7 +171,7 @@ def plot_3d_mocap_vs_triangulation(mc_xyz, tri_in_M, output_path):
     h2 = plot.draw_joints_and_skeleton_3d(ax, tri_in_M,   config.CONNECTIONS, color='tab:orange', marker='^', s=30, lw=1.5, label="Triangulated→M")
 
     # Yellow connectors between corresponding joints
-    plot.draw_skeleton_connections_3d(ax, mc_xyz, tri_in_M, color='y', lw=2.0, alpha=0.9)
+    plot.draw_skeleton_connections_3d(ax, mc_xyz, tri_in_M, color='y', lw=1.0, alpha=0.9)
 
     _set_axes_equal(ax)
     ax.legend(handles=[h1, h2], loc="upper right")
@@ -201,6 +208,7 @@ def evaluate_triangulation_error(camera, rvecs, tvecs, tri_xyz_W, mc_xyz, units=
         "tri_in_M": tri_in_M,
     } 
     
+
 def main():
     os.makedirs(config.MOCAP_OVERLAYS_FOLDER, exist_ok=True)
     os.makedirs(config.MOCAP_TRIANG_3D_FOLDER, exist_ok=True)
@@ -213,54 +221,134 @@ def main():
     nick = mat['Nick_2']
     frame_rate = nick.FrameRate
     position_data = nick.Skeletons.PositionData  # (3, 24, n_frames)
-    
 
-    all_errors = []
+    # Convert mocap to mm if it looks like meters
+    first_mc = position_data[:, :, 0].T
+    med_norm = float(np.median(np.linalg.norm(first_mc, axis=1)))
+    mocap_to_mm = 1000.0 if med_norm < 10.0 else 1.0
+
+    # Parse all label files and group by (frame, camera)
+    by_frame = defaultdict(list)  # frame -> list of (cam_idx, label_path, name_wo_ext)
     for label_path in glob.glob(os.path.join(config.RECT_LABEL_FOLDER, "*.txt")):
         basename = os.path.basename(label_path)
-        name_wo_ext = os.path.splitext(basename)[0]
-        img_path = os.path.join(config.RECT_IMG_FOLDER, f"{name_wo_ext}.jpg")
         match = re.search(r'out(\d+)_frame_(\d+).*\.txt$', basename)
         if not match:
-            print("Could not extract camera index or frame index from filename:", label_path)
             continue
         cam_index = int(match.group(1))
         frame_index = int(match.group(2))
-        
-        mocap_overlay_path = os.path.join(config.MOCAP_OVERLAYS_FOLDER, f"{name_wo_ext}_overlay.jpg")
-        mocap_index = get_mocap_idx(frame_index, config.ANNOTATION_ALIGN_FRAME, config.MOCAP_ALIGN_FRAME,
-                                    mocap_fps=frame_rate, ann_fps=12, n_mocap_frames=position_data.shape[2])
-        joints_3d = position_data[:, :, mocap_index].T  # (24, 3)
+        by_frame[frame_index].append((cam_index, label_path, os.path.splitext(basename)[0]))
 
-        _, _, keypoints = annot.parse_annotation_file(label_path, config.IMG_WIDTH, config.IMG_HEIGHT)
-        
-        calib_path = os.path.join(config.RECT_CAMERA_FOLDER, f"cam_{cam_index}_calib.json")
-        camera = calib.load_calibration(calib_path)
-        
-        rvec, tvec, K_rect = align_mocap_and_annotations(img_path, keypoints, joints_3d, camera, mocap_overlay_path)
-        
-        tri_path = os.path.join(config.TRIANG_FOLDER, f"triangulated_frame_{frame_index:04d}.txt")
-        tri = np.loadtxt(tri_path, dtype=float)
-        tri = tri.reshape(-1, 3)
-        mc = np.asarray(joints_3d, dtype=float)     
-        
-        lbl_idxs   = sorted(config.LABELS_CONVERTER.keys())        # [0,1,2,...,17]
-        mocap_idxs = [config.LABELS_CONVERTER[i] for i in lbl_idxs]
+    # Consistent 18-joint order
+    lbl_idxs   = sorted(config.LABELS_CONVERTER.keys())
+    mocap_idxs = [config.LABELS_CONVERTER[i] for i in lbl_idxs]
 
-        tri_ordered = tri[lbl_idxs, :3]                     # (18,3)
-        mc_ordered  = mc[np.array(mocap_idxs), :3]  
+    # Pass 1: compute per-frame T_M_from_W for each camera; stash for averaging
+    per_cam_Ts = defaultdict(list)         # cam -> list of 4x4 T_M_from_W
+    per_frame_camdata = defaultdict(dict)  # frame -> cam -> dict(tri_W, mc_M, name)
 
-        result = evaluate_triangulation_error(camera, rvec, tvec, tri_ordered, mc_ordered, units="mm")
-        # print(f"Frame {frame_index} | MPJPE: {result['MPJPE_mm']:.2f} mm | RMSE: {result['RMSE_mm']:.2f} mm")
-        all_errors.append({"frame": frame_index,  "camera": cam_index,"mpjpe": result["MPJPE_mm"],"mse": result["MSE_mm"] })
-
-        mocap_3d_path = os.path.join(config.MOCAP_TRIANG_3D_FOLDER, f"{name_wo_ext}_3D.png")
-        plot_3d_mocap_vs_triangulation(
-            mc_xyz=mc_ordered,
-            tri_in_M=result["tri_in_M"],
-            output_path=mocap_3d_path,
+    for frame_idx in sorted(by_frame.keys()):
+        # Mocap @ this time, in mm
+        mocap_idx = get_mocap_idx(
+            frame_idx, config.ANNOTATION_ALIGN_FRAME, config.MOCAP_ALIGN_FRAME,
+            mocap_fps=frame_rate, ann_fps=12, n_mocap_frames=position_data.shape[2]
         )
+        joints_3d_mm = position_data[:, :, mocap_idx].T * mocap_to_mm  # (24,3)
+        mc_full = np.asarray(joints_3d_mm, float)
+
+        # Triangulated 3D for this frame
+        triang_path = os.path.join(config.TRIANG_FOLDER, f"triangulated_frame_{frame_idx:04d}.txt")
+        triang_full = np.loadtxt(triang_path, dtype=float).reshape(-1, 3)
+
+        for cam_idx, label_path, name_wo_ext in sorted(by_frame[frame_idx]):
+            try:
+                # Parse annotation + calibration
+                _, _, keypoints = annot.parse_annotation_file(label_path, config.IMG_WIDTH, config.IMG_HEIGHT)
+                calib_path = os.path.join(config.RECT_CAMERA_FOLDER, f"cam_{cam_idx}_calib.json")
+                camera = calib.load_calibration(calib_path)  # (mtx, dist, tvecs, rvecs, K_rect, P)
+                P = camera[-1]
+
+                # PnP (also writes overlay once)
+                img_path = os.path.join(config.RECT_IMG_FOLDER, f"{name_wo_ext}.jpg")
+                rvec, tvec, _ = align_mocap_and_annotations(
+                    img_path, keypoints, joints_3d_mm, camera,
+                    out_path=os.path.join(config.MOCAP_OVERLAYS_FOLDER, f"{name_wo_ext}_overlay.jpg")
+                )
+
+                # Compose W->C (from P) and C->M (from PnP) => W->M
+                T_C_from_W = _T_C_from_W_from_P(P)
+                T_M_from_C = _T_M_from_C_from_pnp(rvec, tvec)
+                T_M_from_W = T_M_from_C @ T_C_from_W
+
+                # Reorder joints to 18 subset
+                tri_W = triang_full[lbl_idxs, :3]
+                mc_M  = mc_full[np.array(mocap_idxs), :3]
+
+                # Store
+                per_cam_Ts[cam_idx].append(T_M_from_W)
+                per_frame_camdata[frame_idx][cam_idx] = {
+                    "name": name_wo_ext,
+                    "tri_W": tri_W,
+                    "mc_M": mc_M
+                }
+            except Exception as e:
+                print(f"Frame: {frame_idx} Cam: {cam_idx} warn: {e}")
+                continue
+
+    # Average T_M_from_W per camera across its frames
+    Tbar_per_cam = {}
+    for cam_idx, Ts in sorted(per_cam_Ts.items()):
+        Tbar = _avg_se3(Ts)
+        if Tbar is not None:
+            Tbar_per_cam[cam_idx] = Tbar
+
+    if not Tbar_per_cam:
+        print("No averaged transforms were computed.")
+        return
+
+    # Pick the single best camera (lowest average MPJPE using its averaged T)
+    mean_err = {}
+    for cam_idx, Tbar in Tbar_per_cam.items():
+        errs = []
+        for f_idx, cam_dict in per_frame_camdata.items():
+            if cam_idx not in cam_dict:
+                continue
+            tri_W = cam_dict[cam_idx]["tri_W"]
+            mc_M  = cam_dict[cam_idx]["mc_M"]
+            tri_M = _transform_points(tri_W, Tbar)
+            per_joint = np.linalg.norm(tri_M - mc_M, axis=1)
+            errs.append(per_joint.mean())
+        mean_err[cam_idx] = float(np.mean(errs)) if errs else float("inf")
+        print(f"Cam {cam_idx}: mean MPJPE={mean_err[cam_idx]:.2f}mm")
+
+    best_cam = min(mean_err, key=mean_err.get)
+
+    # Pass 2: use the best camera's averaged transformation matrix for all its frames
+    all_errors = []
+    for frame_idx in sorted(per_frame_camdata.keys()):
+        if best_cam not in per_frame_camdata[frame_idx]:
+            continue
+        rec = per_frame_camdata[frame_idx][best_cam]
+        tri_M = _transform_points(rec["tri_W"], Tbar_per_cam[best_cam])
+        per_joint = np.linalg.norm(tri_M - rec["mc_M"], axis=1)
+        mpjpe = float(np.mean(per_joint))
+        mse   = float(np.mean(per_joint**2))
+
+        all_errors.append({"frame": frame_idx, "camera": best_cam, "mpjpe": mpjpe, "mse": mse})
+
+        # one 3D image per frame
+        out_path = os.path.join(config.MOCAP_TRIANG_3D_FOLDER, f"frame_{frame_idx:04d}_3D.png")
+        plot_3d_mocap_vs_triangulation(rec["mc_M"], tri_M, out_path)
+
+    # Single-line plot, only the best camera is chosen
     plot.plot_errors(all_errors, config.MOCAP_ERROR_PLOTS_FOLDER, unit="mm")
+
+    # Summary
+    if all_errors:
+        mpjpes = np.array([e["mpjpe"] for e in all_errors], float)
+        mses   = np.array([e["mse"]   for e in all_errors], float)
+        rmse   = float(np.sqrt(mses.mean()))
+        print(f"Best camera: Cam {best_cam}")
+        print(f"MPJPE={mpjpes.mean():.2f}mm | RMSE={rmse:.2f}mm")
 
 if __name__ == "__main__":
     main()
