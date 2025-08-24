@@ -249,7 +249,7 @@ def main():
     per_frame_camdata = defaultdict(dict)  # frame -> cam -> dict(tri_W, mc_M, name)
 
     for frame_idx in sorted(by_frame.keys()):
-        # Mocap @ this time, in mm
+        # Mocap at this frame, in mm
         mocap_idx = get_mocap_idx(
             frame_idx, config.ANNOTATION_ALIGN_FRAME, config.MOCAP_ALIGN_FRAME,
             mocap_fps=frame_rate, ann_fps=12, n_mocap_frames=position_data.shape[2]

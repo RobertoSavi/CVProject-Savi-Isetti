@@ -12,7 +12,6 @@ import utils.annotation_utils as annot
 # Parameters
 VISUAL = False #if TRUE shows ALL 3D PLOTS and the ANIMATION, if FALSE just saves the 3d plots and the animation
 
-
 # Load points
 def plot_skeleton(frame_file, output_folder, visual=VISUAL):
     if not os.path.exists(frame_file):

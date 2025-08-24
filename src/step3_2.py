@@ -10,13 +10,10 @@ import utils.annotation_utils as annot
 CAMERA_INDEXES = [2]
 
 # Parameters
-# ==========================
 mocap_file = "../resources/mocap/Nick_2.mat"
 video_file = "../results/rectified_videos/out2.mp4"
 output_file = "../results/video_mocap_time_aligned.mp4"
 
-# Alignment Parameters
-# ==========================
 # Align video frame 46 (0-indexed) with mocap frame 10475 (0-indexed)
 VIDEO_ALIGN_FRAME = 45 # Frame 46 (0-indexed is 45)
 MOCAP_ALIGN_FRAME = 9964 # MoCap frame 9965 (0-indexed is 9964) or 10475 (0-indexed is 10474)
@@ -29,14 +26,10 @@ for cam_idx in CAMERA_INDEXES:
     cameras[cam_idx] = {"mtx": K_rect, "dist": dist, "tvecs": tvecs, "rvecs": rvecs}
 
 
-# Helper: Reproject 3D -> 2D
-# ==========================
 def reproject_points(points_3d, mtx, dist, rvecs, tvecs):
     points_2d, _ = cv2.projectPoints(points_3d, rvecs, tvecs, mtx, dist)
     return points_2d.reshape(-1, 2)
 
-# Load MoCap data
-# ==========================
 data = sio.loadmat(mocap_file, squeeze_me=True, struct_as_record=False)
 nick = data['Nick_2']
 
@@ -47,15 +40,10 @@ segment_labels = [str(lbl) for lbl in nick.Skeletons.SegmentLabels]
 mocap_frame_rate = 100
 mocap_frames = 12000
 
-# 
-# Load Video
-# ==========================
 cap = cv2.VideoCapture(video_file)
 rgb_frame_rate = int(cap.get(cv2.CAP_PROP_FPS))
 n_frames_rgb = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-# Scale factor to map RGB frames to MoCap frames
-# NEW: Calculate scale based on frame rates, not total frames
 frame_scale = mocap_frame_rate / rgb_frame_rate
 
 # Video writer
@@ -64,8 +52,6 @@ height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter(output_file, fourcc, rgb_frame_rate, (width, height))
 
-# Define Skeleton Connections
-# ==========================
 skeleton_edges = [
     ("Hips", "Spine"), ("Spine", "Spine1"), ("Spine1", "Spine2"), ("Spine2", "Neck"),
     ("Neck", "Head"),
@@ -77,9 +63,6 @@ skeleton_edges = [
 
 label_to_index = {lbl: i for i, lbl in enumerate(segment_labels)}
 
-# ==========================
-# Process Video
-# ==========================
 frame_idx = 0
 
 calib_path = os.path.join(config.RECT_CAMERA_FOLDER, f"cam_{cam_idx}_calib.json")
@@ -94,7 +77,6 @@ while cap.isOpened():
         break
 
     # Find corresponding MoCap frame
-    # NEW: Adjust calculation for alignment
     relative_video_frame = frame_idx - VIDEO_ALIGN_FRAME
     mocap_idx = int(MOCAP_ALIGN_FRAME + (relative_video_frame * frame_scale))
     mocap_idx = max(0, min(mocap_idx, mocap_frames - 1)) # Ensure index is within bounds

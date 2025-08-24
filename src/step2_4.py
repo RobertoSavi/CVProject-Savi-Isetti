@@ -12,8 +12,6 @@ import utils.calibration_utils as calib
 import utils.annotation_utils as annot
 import utils.plotting_utils as plot
 
-# ==== CONFIG ====
-
 os.makedirs(config.TRIANG_OVERLAYS_FOLDER, exist_ok=True)
 os.makedirs(config.TRIANG_ERROR_PLOTS_FOLDER, exist_ok=True)
 

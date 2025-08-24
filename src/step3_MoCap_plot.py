@@ -7,7 +7,7 @@ from matplotlib.animation import FuncAnimation
 from vedo import Plotter, Sphere, Line, Text2D
 from step3_2 import mocap_idx_start,mocap_idx_end
 
-VISUAL = False #if TRUE shows ALL 3D PLOTS and the ANIMATION, if FALSE just saves the 3d plots and the animation
+VISUAL = False
 CONNECTIONS = [
     (0,1), (1,2), (2,3), (3,4), (4,5),
     (6,7), (7,8), (8,9), (9,10),
